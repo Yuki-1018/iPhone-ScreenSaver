@@ -1,38 +1,31 @@
 import SwiftUI
 import AVFoundation
 
-struct VideoPlayerView: UIViewRepresentable {
+struct VideoPlayerView: UIViewControllerRepresentable {
     var player: AVPlayer?
-    
-    func makeUIView(context: Context) -> UIView {
-        return PlayerUIView(player: player)
-    }
-    
-    func updateUIView(_ uiView: UIView, context: Context) {
-        if let playerLayer = (uiView as? PlayerUIView)?.playerLayer {
-            playerLayer.player = player
-        }
-    }
-}
+    var isFullscreen: Bool
 
-class PlayerUIView: UIView {
-    var playerLayer: AVPlayerLayer
-    
-    init(player: AVPlayer?) {
-        self.playerLayer = AVPlayerLayer()
-        super.init(frame: .zero)
-        
-        playerLayer.player = player
-        playerLayer.videoGravity = .resizeAspect // アスペクト比を維持
-        layer.addSublayer(playerLayer)
+    func makeUIViewController(context: Context) -> UIViewController {
+        let controller = UIViewController()
+        let playerLayer = AVPlayerLayer(player: player)
+        playerLayer.videoGravity = isFullscreen ? .resizeAspectFill : .resizeAspect
+        controller.view.layer.addSublayer(playerLayer)
+
+        context.coordinator.playerLayer = playerLayer
+        return controller
     }
-    
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
+        context.coordinator.playerLayer?.player = player
+        context.coordinator.playerLayer?.videoGravity = isFullscreen ? .resizeAspectFill : .resizeAspect
+        context.coordinator.playerLayer?.frame = uiViewController.view.bounds
     }
-    
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        playerLayer.frame = bounds
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    class Coordinator {
+        var playerLayer: AVPlayerLayer?
     }
 }
