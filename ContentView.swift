@@ -5,11 +5,12 @@ struct ContentView: View {
     @State private var player: AVPlayer?
     @State private var videoURLs: [URL] = []
     @State private var currentIndex: Int = 0
+    @State private var isFullscreen = false
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         GeometryReader { geometry in
-            VideoPlayerView(player: player)
+            VideoPlayerView(player: player, isFullscreen: isFullscreen)
                 .frame(width: geometry.size.width, height: geometry.size.height)
                 .edgesIgnoringSafeArea(.all)
                 .gesture(
@@ -21,15 +22,26 @@ struct ContentView: View {
                         }
                     }
                 )
-                .onTapGesture {
-                    moveToHomeScreen()
-                }
+                .simultaneousGesture(
+                    MagnificationGesture(minimumScaleDelta: 0.01)
+                        .onEnded { _ in
+                            withAnimation {
+                                isFullscreen.toggle()
+                            }
+                        }
+                )
+                .simultaneousGesture(
+                    TapGesture()
+                        .onEnded {
+                            moveToHomeScreen()
+                        }
+                )
                 .onAppear {
                     loadVideos()
                 }
                 .onChange(of: scenePhase) { newPhase in
                     if newPhase == .active {
-                        player?.play()
+                        restartPlayback()
                     } else if newPhase == .background {
                         player?.pause()
                     }
@@ -43,7 +55,6 @@ struct ContentView: View {
         let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
         let videosFolder = documentsURL.appendingPathComponent("Videos", isDirectory: true)
 
-        // `Videos` フォルダがなければ作成
         if !fileManager.fileExists(atPath: videosFolder.path) {
             do {
                 try fileManager.createDirectory(at: videosFolder, withIntermediateDirectories: true)
@@ -54,10 +65,8 @@ struct ContentView: View {
 
         do {
             let files = try fileManager.contentsOfDirectory(at: videosFolder, includingPropertiesForKeys: nil)
-            videoURLs = files.filter { $0.pathExtension.lowercased() == "mp4" || $0.pathExtension.lowercased() == "mov" }
-                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            videoURLs = files.sorted { $0.lastPathComponent < $1.lastPathComponent }
 
-            // 動画がない場合はアプリを強制終了
             if videoURLs.isEmpty {
                 fatalError("Videos フォルダに動画がありません。アプリを終了します。")
             }
@@ -77,12 +86,13 @@ struct ContentView: View {
     /// 現在の動画を再生
     private func playCurrentVideo() {
         guard videoURLs.indices.contains(currentIndex) else { return }
-        player = AVPlayer(url: videoURLs[currentIndex])
+        let playerItem = AVPlayerItem(url: videoURLs[currentIndex])
+        if player == nil {
+            player = AVPlayer(playerItem: playerItem)
+        } else {
+            player?.replaceCurrentItem(with: playerItem)
+        }
         player?.actionAtItemEnd = .none
-
-        let playerLayer = AVPlayerLayer(player: player)
-        playerLayer.videoGravity = .resizeAspectFill // 画面いっぱいに表示（アスペクト比維持）
-        
         player?.play()
 
         NotificationCenter.default.addObserver(
@@ -90,31 +100,34 @@ struct ContentView: View {
             object: player?.currentItem,
             queue: .main
         ) { _ in
-            player?.seek(to: .zero)
-            player?.play()
+            self.nextVideo()
         }
 
         UserDefaults.standard.setValue(currentIndex, forKey: "lastVideoIndex")
     }
 
-    /// 次の動画へ
-    private func nextVideo() {
-        if currentIndex < videoURLs.count - 1 {
-            currentIndex += 1
+    /// アプリがアクティブになったときに再生を再開
+    private func restartPlayback() {
+        if let player = player, player.currentItem == nil {
             playCurrentVideo()
         }
+        player?.play()
     }
 
-    /// 前の動画へ
+    /// 次の動画へ（最後なら最初に戻る）
+    private func nextVideo() {
+        currentIndex = (currentIndex + 1) % videoURLs.count
+        playCurrentVideo()
+    }
+
+    /// 前の動画へ（最初なら最後に戻る）
     private func prevVideo() {
-        if currentIndex > 0 {
-            currentIndex -= 1
-            playCurrentVideo()
-        }
+        currentIndex = (currentIndex - 1 + videoURLs.count) % videoURLs.count
+        playCurrentVideo()
     }
 
     /// ホーム画面へ移動
     private func moveToHomeScreen() {
-        UIApplication.shared.perform(#selector(NSXPCConnection.suspend))
+        UIControl().sendAction(#selector(URLSessionTask.suspend), to: UIApplication.shared, for: nil)
     }
 }
