@@ -48,4 +48,4 @@ You can manage this folder using the **Files app**.
 
 ## License
 
-This project is licensed under the WTLPL License.
+This project is licensed under the WTFPL License.
