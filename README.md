@@ -1,4 +1,4 @@
-# ScreenSaver Video Player (iOS & iPadOS)
+# ScreenSaver Video Player (iPhone)
 
 This is a **fullscreen video player** app for iPhone and iPad that continuously loops video files stored in the **Documents/Videos** folder. It supports **swipe gestures to switch videos** and **remembers the last played video** when reopening the app. The app is designed for a seamless screen saver experience.
 
