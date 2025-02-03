@@ -2,10 +2,11 @@ import SwiftUI
 import AVFoundation
 
 struct ContentView: View {
-    @State private var player: AVPlayer?
+    @State private var player: AVQueuePlayer?
+    @State private var looper: AVPlayerLooper?
     @State private var videoURLs: [URL] = []
     @State private var currentIndex: Int = 0
-    @State private var isFullscreen = false
+    @State private var isFullscreen: Bool = UserDefaults.standard.bool(forKey: "isFullscreen")
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -27,6 +28,7 @@ struct ContentView: View {
                         .onEnded { _ in
                             withAnimation {
                                 isFullscreen.toggle()
+                                UserDefaults.standard.set(isFullscreen, forKey: "isFullscreen")
                             }
                         }
                 )
@@ -83,44 +85,33 @@ struct ContentView: View {
         }
     }
 
-    /// 現在の動画を再生
+    /// 現在の動画をループ再生
     private func playCurrentVideo() {
         guard videoURLs.indices.contains(currentIndex) else { return }
         let playerItem = AVPlayerItem(url: videoURLs[currentIndex])
-        if player == nil {
-            player = AVPlayer(playerItem: playerItem)
-        } else {
-            player?.replaceCurrentItem(with: playerItem)
-        }
-        player?.actionAtItemEnd = .none
-        player?.play()
 
-        NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemDidPlayToEndTime,
-            object: player?.currentItem,
-            queue: .main
-        ) { _ in
-            self.nextVideo()
-        }
+        player = AVQueuePlayer(playerItem: playerItem)
+        looper = AVPlayerLooper(player: player!, templateItem: playerItem) // ループ再生
+        player?.play()
 
         UserDefaults.standard.setValue(currentIndex, forKey: "lastVideoIndex")
     }
 
     /// アプリがアクティブになったときに再生を再開
     private func restartPlayback() {
-        if let player = player, player.currentItem == nil {
+        if player?.currentItem == nil {
             playCurrentVideo()
         }
         player?.play()
     }
 
-    /// 次の動画へ（最後なら最初に戻る）
+    /// 次の動画へ（手動でスワイプ時のみ）
     private func nextVideo() {
         currentIndex = (currentIndex + 1) % videoURLs.count
         playCurrentVideo()
     }
 
-    /// 前の動画へ（最初なら最後に戻る）
+    /// 前の動画へ（手動でスワイプ時のみ）
     private func prevVideo() {
         currentIndex = (currentIndex - 1 + videoURLs.count) % videoURLs.count
         playCurrentVideo()
